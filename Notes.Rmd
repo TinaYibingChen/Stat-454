@@ -1,0 +1,6 @@
+Notes from Taylor:
+
+- INLA package is not good: While it is faster than MCMC, it is nowhere near as accurate.
+- Packages we should use/explore: CARBayes, RStan
+
+Links to resources:
