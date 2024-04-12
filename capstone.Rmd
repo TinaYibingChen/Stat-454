@@ -1,5 +1,5 @@
 ---
-title: "capstone 454"
+title: "Capstone 454"
 author: "Tina Chen"
 date: "2024-04-02"
 output: html_document
@@ -7,5 +7,107 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidyverse)
+library(sf)
+```
+
+## Research goals
+
+- What methodology are you exploring? 
+  * CAR (ICAR) (special case of the Leroux model)
+  * BYM (further exploration if we have time)
+- What is the motivation / goal behind this methodology? When is it useful?
+  * We want to explore how correlated data (Specifically spatial data) and bayesian statistics are connected.
+  * **Add motivations about the topic and datasets (Samina)**
+
+
+## Resources
+- What resources (eg: books, blogs, articles) are you using to get started?
+  * Data resources: SEDAC NASA EOSDIS geographically gridded economic data (our dataset)
+  * Class Notes from Correlated Data https://bcheggeseth.github.io/CorrelatedData/areal-data.html
+  * Walk through an example hierarchical ICAR model, using both notation and R code. https://atlas.cancer.org.au/developing-a-cancer-atlas/Chapter_4.html
+  
+- How do you plan to implement this methodology in R? For example, what packages might be useful? If none exist, what’s your implementation plan?
+  * Method r package: Intrinsic Conditional Auto-Regressive (ICAR) models. https://mc-stan.org/users/documentation/case-studies/icar_stan.html
+
+
+
+
+
+
+
+## Methodology background
+
+#### Model: Conditional Autoregressive (CAR) Models
+ $$
+ \begin{split}
+ \phi_i | \phi_j ,j \neq i, 
+ &\sim N (\sum\limits_{j=1}^n w_{ij} \phi_j, \sigma^2)\\
+ \phi &\sim N(0, Q^{-1})\\
+ Q &= [D_{\tau}(I - \alpha B)]
+ \end{split}
+ $$
+ Where $W$ is the $n \times n$ adjacency matrix where entries $\{i,i\}$ are zero and the off-diagonal elements are 1 if regions $i$ and $j$ are neighbors and 0.
+
+$D$ is the $n \times n$ diagonal matrix where entries $\{i,i\}$  are the number of neighbors of region $i$ and the off-diagonal entries are 0.
+
+$D_{\tau} = \tau D$
+
+$\alpha$ controls the amount of spatial correlation; $\alpha = 0$ implies spatial independence and $\alpha = 1$ implies complete spatial correlation. 
+
+$B$ is the scaled adjacency matrix $D^{-1}W$
+
+$I$ is an $n \times n$ identity matrix
+ 
+ 
+ 
+
+#### Assumption
+
+
+An Intrinsic Conditional Auto-Regressive (ICAR) model is a CAR model where $\alpha=1$
+, that is, it assumes complete spatial correlation between regions. (This assumption is problematic). The joint distribution of the ICAR model is derived from the joint distribution for the CAR model as follows:
+
+$$
+ \phi \sim N(0, [\tau(D-W)]^{-1})\\
+$$
+The resulting matrix $[\tau(D-W)]$ is singular, thus the ICAR variate $\phi$ is an improper prior distribution. But it still can be used as a prior part of a hierarchical model.
+
+  - since $D_\tau = \tau D$ and $B = D^{-1}W$, the expression $[D_{\tau}(I -\alpha B)]$ simplifies to $[\tau(D-\alpha W)]$
+  - since $\alpha = 1$, it is omitted.
+
+
+### Data collection
+> Introductory:
+Include your data source(s), a narrative description of how/when/why/by whom these data were collected, and a codebook or table describing the variables you plan to use in your analysis. 
+
+
+
+### Data summaries
+
+
+```{r}
+data_demo <- read.csv("gecon-v4.csv")
+dim(data_demo)
+names(data_demo) # need code book 
+head(data_demo)
+```
+
+
+
+
+* note: tweak the parameters for prior (hierarchical model)
+
+
+
+```{r}
+# , crs = 4326
+hulls <- data_demo %>%
+  st_as_sf(coords = c("LONGITUDE", "LAT")) %>%
+  group_by(COUNTRY) %>%
+  dplyr::summarize(geometry = st_union(geometry)) %>%
+  st_convex_hull()
+plot(hulls)
 ```
 
