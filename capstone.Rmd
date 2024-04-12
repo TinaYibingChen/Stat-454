@@ -1,6 +1,6 @@
 ---
 title: "Capstone 454"
-author: "Tina Chen"
+author: ""
 date: "2024-04-02"
 output: html_document
 ---
@@ -40,15 +40,18 @@ library(sf)
 ## Methodology background
 
 #### Model: Conditional Autoregressive (CAR) Models
- $$
+
  \begin{split}
+ 
  \phi_i | \phi_j ,j \neq i, 
  &\sim N (\sum\limits_{j=1}^n w_{ij} \phi_j, \sigma^2)\\
  \phi &\sim N(0, Q^{-1})\\
  Q &= [D_{\tau}(I - \alpha B)]
+ 
  \end{split}
- $$
- Where $W$ is the $n \times n$ adjacency matrix where entries $\{i,i\}$ are zero and the off-diagonal elements are 1 if regions $i$ and $j$ are neighbors and 0.
+
+ 
+Where $W$ is the $n \times n$ adjacency matrix where entries $\{i,i\}$ are zero and the off-diagonal elements are 1 if regions $i$ and $j$ are neighbors and 0.
 
 $D$ is the $n \times n$ diagonal matrix where entries $\{i,i\}$  are the number of neighbors of region $i$ and the off-diagonal entries are 0.
 
@@ -77,37 +80,99 @@ The resulting matrix $[\tau(D-W)]$ is singular, thus the ICAR variate $\phi$ is 
   - since $D_\tau = \tau D$ and $B = D^{-1}W$, the expression $[D_{\tau}(I -\alpha B)]$ simplifies to $[\tau(D-\alpha W)]$
   - since $\alpha = 1$, it is omitted.
 
+### Data
 
-### Data collection
+#### Data collection
 > Introductory:
 Include your data source(s), a narrative description of how/when/why/by whom these data were collected, and a codebook or table describing the variables you plan to use in your analysis. 
 
 
 
-### Data summaries
+#### Data summaries
 
 
-```{r}
+```{r echo=FALSE}
 data_demo <- read.csv("gecon-v4.csv")
 dim(data_demo)
 names(data_demo) # need code book 
 head(data_demo)
+
+
+
+```
+#### Visualization
+
+```{r}
+data_demo %>% filter( PPP2005_40 !=0) %>% 
+ggplot(aes(x=PPP2005_40))+geom_density()
 ```
 
 
 
 
-* note: tweak the parameters for prior (hierarchical model)
 
 
 
-```{r}
-# , crs = 4326
-hulls <- data_demo %>%
+
+```{r include=FALSE}
+
+# just for fun, :)
+data_demo %>%
   st_as_sf(coords = c("LONGITUDE", "LAT")) %>%
   group_by(COUNTRY) %>%
   dplyr::summarize(geometry = st_union(geometry)) %>%
   st_convex_hull()
-plot(hulls)
+
 ```
+
+
+
+
+```{r point, include=FALSE}
+# point
+# points_sf <- data_demo %>%
+#   st_as_sf(coords = c("LONGITUDE", "LAT"), crs = 4326)
+# 
+# # Expand each point to cover a 1x1 degree grid
+# expanded_grid <- st_make_grid(points_sf, cellsize = c(1, 1))
+# 
+# ggplot() +
+#   geom_sf(data = expanded_grid, fill = NA, color = NA) +
+#   geom_sf(data = points_sf, aes(color = POPGPW_2005_40), size = 0.1 )+
+#   labs(x = "Longitude", y = "Latitude") +
+#   theme_minimal()
+
+
+```
+
+```{r grid }
+
+
+points_sf <- data_demo %>%
+  st_as_sf(coords = c("LONGITUDE", "LAT"), crs = 4326)
+
+# Expand each point to cover a 1x1 degree grid
+expanded_grid <- st_make_grid(points_sf, cellsize = c(1, 1))
+
+index <- which(lengths(st_intersects(expanded_grid, points_sf)) > 0)
+
+# Filter out only the intersecting grid cells
+fishnet <- expanded_grid[index]
+
+# Convert the grid cells to sf, create unique IDs, and join with points
+joined_data <- fishnet %>%
+  st_as_sf() %>%
+  mutate(grid_id = row_number()) %>%
+  st_join(points_sf)
+
+
+ggplot() +
+  geom_sf(data = fishnet, fill = NA, color = "black") +
+  geom_sf(data = joined_data, aes(fill = POPGPW_2005_40), color = NA) +
+  theme_classic()
+
+```
+
+ * note: tweak the parameters for prior (hierarchical model)
+
 
