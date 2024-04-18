@@ -2,7 +2,10 @@
 title: "Capstone 454"
 author: "Tina Chen, Kyle Suelflow, Samina Stack"
 date: "`r format(Sys.Date(),'%e %B, %Y')`"
-output: html_document
+output:
+   prettydoc::html_pretty:
+    theme: cayman
+    toc: yes
 ---
 
 ```{r setup, include=FALSE}
@@ -15,10 +18,7 @@ knitr::opts_chunk$set(
   fig.width = 4.25,
   fig.align = 'center')
 
-library(dplyr)
-library(tidyverse)
-library(sf)
-library(readxl)
+source('Cleaning.R')
 ```
 
 ## Research goals
@@ -46,61 +46,98 @@ library(readxl)
 
 
 
-## Methodology background
+## Methodology
 
-#### About Areal Data and neightborhood structure
+#### Backrgound: Areal Data and neighborhood structure
 Areal data differs from point data, which consists of measurements from a known set of geo-spatial points. The boundary of areas can be considered polygons determined by a closed sequence of ordered coordinates connected by straight line segments. 
+
+
+
+The essential idea is that the probability of values estimated at any given location are conditional on the level of neighboring values. We assume that nearby locations tend to have similar characteristics or behaviors. Therefore, we need to define what is nearby locations.
 
 For a set of $N$ areal units, the relationship between areal units is described by an $n \times n$ adjacency matrix $W$. The entries indicate whether two regions $n_i$ and $n_j$ are neighbors, with a value of 1 signifying adjacency and 0 indicating non-adjacency. It's worth noting that in models like Conditional Autoregressive (CAR) models, the neighbor relationship is symmetric, but a region is not considered its own neighbor ($W_{ii} = 0$).
 
-  * I see some inconsistency notations (adjacency matrix $A$ and weighted adjacency matrix $W$) used in the r package; I will check it later.
+
   
   
-#### Model: Conditional Autoregressive (CAR) Models
+### Conditional Autoregressive (CAR) priors for spatial random effects
 
 
 $\phi$, an n-length vector $\phi = (\phi_1, ..., \phi_n)^T$, is the spatial random variables that can represent spatial interactions between $n_i$ and $n_j$.
 
-In the full conditional distribution, each $\phi_i$ is conditional on the sum of the weighted values of its neighbors $(w_{ij} \phi_j)$ and has unknown variance. 
-
- \begin{split}
+In the full conditional distribution, each $\phi_i$ is conditional on the sum of the weighted values of its neighbors, and has unknown variance.
+$$
+\begin{split}
  
  \phi_i | \phi_j ,j \neq i, 
- &\sim N (\sum\limits_{j=1}^n w_{ij} \phi_j, \sigma^2)\\ 
- \phi &\sim N(0, Q^{-1})\\
- Q &= [D_{\tau}(I - \alpha B)]
+ &\sim N (\sum\limits_{j=1}^n b_{ij} \phi_j, \tau_i^{-1})\\ 
  
- \end{split}
+\end{split}
+$$
+Where $\tau_i$ is a spatially varying precision parameter, and $b_{ii} = 0$.
 
- 
+The summation term in this expression is simply the weighted sum of the mean adjusted $\rho$ at all other locations $j$ - this may or may not be a reasonable assumption for a particular problem under consideration.
+
+By Brook's Lemme, the joint distribution fo $\phi$ is then:
+$$
+\begin{split}
+ \phi &\sim N(0, [D_{\tau}(I - \alpha B)]^{-1})\\
+ \end{split}
+$$
+
+then the CAR prior specification simplifies to:
+
+$$
+\begin{split}
+ \phi &\sim N(0, [\tau (D- \alpha W)]^{-1})\\
+ \end{split}
+$$
+
+##### Assumption:
+
 Where $W$ is the $n \times n$ adjacency matrix where entries $\{i,i\}$ are zero and the off-diagonal elements are 1 if regions $i$ and $j$ are neighbors and 0.
 
 $D$ is the $n \times n$ diagonal matrix where entries $\{i,i\}$ are the number of neighbors of region $i$ and the off-diagonal entries are 0.
 
 $D_{\tau} = \tau D$
 
-$\alpha$ controls the amount of spatial correlation; $\alpha = 0$ implies spatial independence and $\alpha = 1$ implies complete spatial correlation. 
+$\alpha$ controls the amount of spatial correlation parameter that determines the size and nature (positive or negative) of the spatial neighborhood effect; $\alpha = 0$ implies spatial independence and $\alpha = 1$ implies complete spatial correlation. 
 
 $B$ is the scaled adjacency matrix $D^{-1}W$
 
 $I$ is an $n \times n$ identity matrix
  
-
- 
-
-#### Assumption
+When $\alpha$ is in the interval $(0,1)$, the covariance matrix $[D_{\tau}(I - \alpha B)]$ is positive definite, thus the joint distribution $\phi$ is proper.
 
 
-An Intrinsic Conditional Auto-Regressive (ICAR) model is a CAR model where $\alpha=1$
-, that is, it assumes complete spatial correlation between regions. (This assumption is problematic). The joint distribution of the ICAR model is derived from the joint distribution for the CAR model as follows:
+###  Likelihood functionL: A Gaussian specification 
+
+Suppose we have aggregated continuous data $y_1,y_2,...,y_n$ at $n$ locations, and we expect that neighboring locations will have similar data With a Gaussian likelihood:
 
 $$
- \phi \sim N(0, [\tau(D-W)]^{-1})\\
-$$
-The resulting matrix $[\tau(D-W)]$ is singular, thus the ICAR variate $\phi$ is an improper prior distribution. But it still can be used as a prior part of a hierarchical model.
+\begin{split}
 
-  - since $D_\tau = \tau D$ and $B = D^{-1}W$, the expression $[D_{\tau}(I -\alpha B)]$ simplifies to $[\tau(D-\alpha W)]$
-  - since $\alpha = 1$, it is omitted.
+y_i \sim \text{N}\left(X_i \beta + \phi_i \right)
+
+\end{split}
+$$
+
+Where $X_i$ is a design vector (the $i^{th}$ row from a design matrix), $\beta$ is a vector of coefficients, $\phi_i$ is a spatial adjustment.
+  
+  
+
+
+### Complete Bayesian Specification
+
+Our posterior distribution is:
+$$
+\begin{split}
+
+p(\phi, \beta, \alpha, \tau \mid y) \propto p(y \mid \beta, \phi) p(\phi \mid \alpha, \tau) p(\alpha) p(\tau) p(\beta)
+
+\end{split}
+$$
+
 
 ### Data
 
@@ -113,10 +150,7 @@ We are considering using geographically gridded economic data for the years 1990
 
 
 ```{r}
-code_book <- read_excel("Gecon40_post_final.xls", sheet = "definitions")
-
-code_book[c(2,3,4,5,7,8,9,13,14,16,20,25,29,30,34,35,41,44,46),]
-
+used_def
 ```
 
 
@@ -126,20 +160,24 @@ code_book[c(2,3,4,5,7,8,9,13,14,16,20,25,29,30,34,35,41,44,46),]
 
 
 ```{r}
-data_demo <- read_excel("Gecon40_post_final.xls")
-dim(data_demo)
-names(data_demo) # need code book 
-head(data_demo)
 
-# number of countries in the dataset
-data_demo %>% count(COUNTRY) %>% nrow()
+dim(us_data)
+names(us_data) 
+head(us_data)
+
 ```
 #### Visualization
 
 
 ```{r}
+# not this one
 data_demo %>% filter( POPGPW_2005_40 !=0) %>% 
-ggplot(aes(x=POPGPW_2005_40))+
+ggplot(aes(x=MER2005_40))+
+  geom_density()
+
+
+data_demo %>% filter(POPGPW_2005_40 !=0) %>% 
+ggplot(aes(x=log(MER2005_40)))+
   geom_density()
 ```
   
@@ -179,37 +217,172 @@ ggplot() +
 
 
 
+
+
+
+
+
+
+
 ```{r , fig.width = 7, fig.height = 5}
-# only US focus
-points_sf <- data_demo %>% filter(COUNTRY == "United States") %>% 
-  st_as_sf(coords = c("LONGITUDE", "LAT"), crs = 4326)
-
-# Expand each point to cover a 1x1 degree grid
-expanded_grid <- st_make_grid(points_sf, cellsize = c(1, 1))
-
-index <- which(lengths(st_intersects(expanded_grid, points_sf)) > 0)
-
-# Filter out only the intersecting grid cells
-fishnet <- expanded_grid[index]
-
-# Convert the grid cells to sf, create unique IDs, and join with points
-joined_data <- fishnet %>%
-  st_as_sf() %>%
-  mutate(grid_id = row_number()) %>%
-  st_join(points_sf)
-
 
 ggplot() +
-  geom_sf(data = fishnet, fill = NA, color = "black") +
-  geom_sf(data = joined_data,
+   geom_sf(data = joined_us_data, fill = "grey", color = NA) +
+  geom_sf(data = joined_us_data %>% filter(lat > 40   & long < -110),
           aes(fill = log(POPGPW_2005_40)), color = NA) +
-  theme_classic()+
+  theme_classic() +
   theme(legend.title = element_text(size = 10),
-               legend.text = element_text(size = 10))+
-  labs(fill = "log(Grid cell\n population in 2005)")+
-  coord_sf(xlim = c(-125, -70),ylim = c(22, 52))+
-scale_fill_gradient(low = "blue", high = "orange")
+        legend.text = element_text(size = 10)) +
+  labs(fill = "log(Grid cell\n population in 2005)") +
+  coord_sf(xlim = c(-125, -70), ylim = c(22, 52)) +
+  scale_fill_gradient(low = "blue", high = "orange")
+
+
+simple_data_A <- joined_us_data %>% filter(lat > 40   & long < -110)
+length(simple_data_A$grid_id)
+
+# simple_data_A <- joined_us_data %>% filter(lat > 45   & long < -115)
+# length(simple_data_A$grid_id)
 ```
 
-  * to do: tweak the parameters for prior (hierarchical model)
+```{r}
+joined_us_data <- joined_us_data %>% na.omit() %>% mutate(POPGPW_2005_40 = as.integer(POPGPW_2005_40))
+form <- log(POPGPW_2005_40)  ~ dis_to_water + `log(MER2005_40)`+  TEMPAV_8008+ PRECAVNEW80_08+D3
+model <- lm(formula=form, data = joined_us_data)
+summary(model)
+
+
+
+```
+
+```{r}
+library(spdep)
+
+W.nb <- poly2nb(joined_us_data,joined_us_data$grid_id)
+W.list <- nb2listw(W.nb, style="B", zero.policy = TRUE) # list with spatial weights for W.nb
+
+length(W.nb)
+length(residuals(model))
+
+
+
+# moran.mc(x=residuals(model), listw=W.list, nsim=1000)
+
+
+centroids <- st_centroid(st_geometry(joined_us_data), of_largest_polygon=TRUE)
+# nb_Q_net <- nb2lines(nb = W.nb, coords = centroids, as_sf = TRUE)
+# 
+# plot_queen <- joined_us_data %>%
+# ggplot() + 
+#   geom_sf(fill = 'white',color = 'darkgrey') + 
+#   geom_sf(data = centroids) + 
+#   geom_sf(data = nb_Q_net) + 
+#   theme_classic()
+
+```
+The Moran’s I test has a p-value much less than 0.05, which suggests that the residuals contain substantial positive spatial autocorrelation.
+  
+```{r}
+W <- nb2mat(W.nb, style="B")
+
+
+library(CARBayes)
+
+chain <- S.CARleroux(formula=form, data=joined_us_data, family="gaussian", W = W,
+      burnin=100, n.sample=1000, n.chains=3, n.cores=3)
+
+# corpcor::is.positive.definite(W)  # FALSE
+# isSymmetric(W)   # FALSE
+# 
+# #Error in chol.default(W) : the leading minor of order 4 is not positive
+
+summary(chain)
+
+
+# check ll para
+
+# saveRDS()
+```
+
+```{r}
+library(coda)
+summary(chain$samples)
+
+
+
+plot(chain$samples$phi[,2:4][,1])
+plot(chain$samples$beta[,2:4][,1])
+plot(chain$samples$rho)
+plot(chain$samples$tau2)
+
+
+
+
+
+```
+
+```{r}
+library(GGally)
+ggpairs(data = joined_us_data, columns = c(3,7,9,12,13,14))
+
+
+```
+
+```{r}
+# check all parameters
+# has less data points
+# run a longer chain 
+# has higher burn in 
+# simplify the model
+```
+
+
+```{r}
+# simply model
+simple_fom <- log(POPGPW_2005_40)  ~  `log(MER2005_40)`+  TEMPAV_8008 
+simple_data_A
+simple_model <- lm(formula=simple_fom, data = simple_data_A)
+summary(simple_model)
+W.nb_simple <- poly2nb(simple_data_A,simple_data_A$grid_id)
+# W.list_simple <- nb2listw(W.nb_simple, style="B", zero.policy = TRUE) # list with spatial weights for W.nb
+W_simple <- nb2mat(W.nb_simple, style="B")
+chain_simple <- S.CARleroux(formula=simple_fom, data=simple_data_A, family="gaussian", W = W_simple,
+      burnin=400, n.sample=10000, n.chains=1, n.cores=3)
+
+# don't know why there is 3 phi, but yes we do only have 2 beta
+plot(chain_simple$samples$phi[,2:4][,1])
+plot(chain_simple$samples$phi[,2:4][,3])
+plot(chain_simple$samples$beta[,2:3][,1])
+plot(chain_simple$samples$beta[,2:3][,2])
+plot(chain_simple$samples$rho)
+plot(chain_simple$samples$tau2)
+```
+
+```{r}
+chain_simple_2 <- S.CARleroux(formula=simple_fom, data=simple_data_A, family="gaussian", W = W_simple,
+      burnin=400, n.sample=10000, n.chains=3, n.cores=3)
+
+plot(chain_simple_2$samples$phi[,2:4][,1])
+plot(chain_simple_2$samples$phi[,2:4][,2]) # have 3 phi
+plot(chain_simple_2$samples$beta[,2:3][,1])
+plot(chain_simple_2$samples$beta[,2:3][,2]) # have 2 beta
+plot(chain_simple_2$samples$rho) # alpha
+plot(chain_simple_2$samples$tau2) # phi 
+plot(chain_simple_2$samples$nu2) # tau
+
+
+```
+
+
+# prior info
+prior.nu2: The prior shape and scale in the form of c(shape, scale) for an Inverse-Gamma(shape,
+scale) prior for nu2. Defaults to c(1, 0.01) and only used if family="Gaussian".
+
+
+prior.tau2 The prior shape and scale in the form of c(shape, scale) for an Inverse-Gamma(shape,
+scale) prior for tau2. Defaults to c(1, 0.01). 
+
+rho The value in the interval [0, 1] that the spatial dependence parameter rho is fixed
+at if it should not be estimated. If this arugment is NULL then rho is estimated
+in the model
 
