@@ -5,6 +5,15 @@ library(dplyr)
 library(tidyverse)
 library(sf)
 library(readxl)
+library(CARBayes)
+library(RColorBrewer)
+library(spdep)
+library(GGally)
+library(coda)
+library(mapview)
+library(leafsync)
+library(INLA)
+library(ggpubr)
 
 select <- dplyr::select
 # import data 
@@ -38,6 +47,8 @@ linear_graph(TEMPAV_8008)
 linear_graph(PRECAVNEW80_08)+
   geom_smooth(method = "lm", color = "green",formula = y~poly(x,2))
 
+
+
 #### sf data for us
 points_us_sf <- us_data %>% mutate(lat = LAT, long = LONGITUDE) %>% 
   st_as_sf(coords = c("LONGITUDE", "LAT"), crs = 4326)
@@ -55,4 +66,6 @@ joined_us_data <- fishnet_us %>%
   mutate(grid_id = row_number()) %>%
   st_join(points_us_sf) %>% 
   na.omit()
+
+simple_data_A <- joined_us_data %>% filter(lat > 0 & lat < 50  & long > -130 & long < -110) %>% na.omit()
 
