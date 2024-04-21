@@ -57,7 +57,7 @@ The essential idea is that the probability of values estimated at any given loca
 
 For a set of $N$ areal units, the relationship between areal units is described by an $n \times n$ adjacency matrix $W$. The entries indicate whether two regions $n_i$ and $n_j$ are neighbors, with a value of 1 signifying adjacency and 0 indicating non-adjacency. It's worth noting that in models like Conditional Autoregressive (CAR) models, the neighbor relationship is symmetric, but a region is not considered its own neighbor ($W_{ii} = 0$).
 
-
+  * we can add the pic to demo the structure for neighborhood
   
   
 ### Conditional Autoregressive (CAR) priors for spatial random effects
@@ -160,31 +160,31 @@ used_def
 
 
 ```{r}
-
 dim(us_data)
 names(us_data) 
 head(us_data)
-
 ```
 #### Visualization
 
 
 ```{r}
-# not this one
-data_demo %>% filter( POPGPW_2005_40 !=0) %>% 
+# Y in the US
+
+us_data %>% filter(POPGPW_2005_40 !=0) %>% 
 ggplot(aes(x=MER2005_40))+
   geom_density()
 
 
-data_demo %>% filter(POPGPW_2005_40 !=0) %>% 
+us_data %>% filter(POPGPW_2005_40 !=0) %>% 
 ggplot(aes(x=log(MER2005_40)))+
   geom_density()
+
 ```
   
-  * Note: POPGPW_2005_40	is Grid cell population, 2005. This is a count variables, need to be logged to make sure data can live from 0 to infinity. 
+
 
 ```{r , fig.width = 7, fig.height = 5}
-# world map
+#  overview of the world map
 
 points_sf <- data_demo %>%
   st_as_sf(coords = c("LONGITUDE", "LAT"), crs = 4326)
@@ -207,11 +207,11 @@ joined_data <- fishnet %>%
 ggplot() +
   geom_sf(data = fishnet, fill = NA, color = "black") +
   geom_sf(data = joined_data,
-          aes(fill = log(POPGPW_2005_40)), color = NA) +
+          aes(fill = log(MER2005_40)), color = NA) +
   theme_classic()+
   theme(legend.title = element_text(size = 10),
                legend.text = element_text(size = 10))+
-  labs(fill = "log(Grid cell\n population in 2005)")
+  labs(fill = "log(Grid Gross Cell \n Product in 2005)")
 
 ```
 
@@ -229,11 +229,11 @@ ggplot() +
 ggplot() +
    geom_sf(data = joined_us_data, fill = "grey", color = NA) +
   geom_sf(data = joined_us_data %>% filter(lat > 40   & long < -110),
-          aes(fill = log(POPGPW_2005_40)), color = NA) +
+          aes(fill = log(MER2005_40)), color = NA) +
   theme_classic() +
   theme(legend.title = element_text(size = 10),
         legend.text = element_text(size = 10)) +
-  labs(fill = "log(Grid cell\n population in 2005)") +
+   labs(fill = "log(Grid Gross Cell \n Product in 2005)")+
   coord_sf(xlim = c(-125, -70), ylim = c(22, 52)) +
   scale_fill_gradient(low = "blue", high = "orange")
 
@@ -246,19 +246,18 @@ length(simple_data_A$grid_id)
 ```
 
 ```{r}
-joined_us_data <- joined_us_data %>% na.omit() %>% mutate(POPGPW_2005_40 = as.integer(POPGPW_2005_40))
-form <- log(POPGPW_2005_40)  ~ dis_to_water + `log(MER2005_40)`+  TEMPAV_8008+ PRECAVNEW80_08+D3
+
+joined_us_data <- joined_us_data %>% na.omit()
+form <- `log(MER2005_40)`  ~ dis_to_water + log(POPGPW_2005_40)+  TEMPAV_8008+ PRECAVNEW80_08+D3
 model <- lm(formula=form, data = joined_us_data)
 summary(model)
-
-
 
 ```
 
 ```{r}
 library(spdep)
 
-W.nb <- poly2nb(joined_us_data,joined_us_data$grid_id)
+W.nb <- poly2nb(joined_us_data, joined_us_data$grid_id)
 W.list <- nb2listw(W.nb, style="B", zero.policy = TRUE) # list with spatial weights for W.nb
 
 length(W.nb)
@@ -269,7 +268,8 @@ length(residuals(model))
 # moran.mc(x=residuals(model), listw=W.list, nsim=1000)
 
 
-centroids <- st_centroid(st_geometry(joined_us_data), of_largest_polygon=TRUE)
+# centroids <- st_centroid(st_geometry(joined_us_data), of_largest_polygon=TRUE)
+
 # nb_Q_net <- nb2lines(nb = W.nb, coords = centroids, as_sf = TRUE)
 # 
 # plot_queen <- joined_us_data %>%
@@ -299,7 +299,7 @@ chain <- S.CARleroux(formula=form, data=joined_us_data, family="gaussian", W = W
 summary(chain)
 
 
-# check ll para
+# check all para
 
 # saveRDS()
 ```
@@ -339,7 +339,7 @@ ggpairs(data = joined_us_data, columns = c(3,7,9,12,13,14))
 
 ```{r}
 # simply model
-simple_fom <- log(POPGPW_2005_40)  ~  `log(MER2005_40)`+  TEMPAV_8008 
+simple_fom <-  `log(MER2005_40)`  ~  `log(POPGPW_2005_40)`+ TEMPAV_8008 
 simple_data_A
 simple_model <- lm(formula=simple_fom, data = simple_data_A)
 summary(simple_model)
@@ -370,6 +370,19 @@ plot(chain_simple_2$samples$rho) # alpha
 plot(chain_simple_2$samples$tau2) # phi 
 plot(chain_simple_2$samples$nu2) # tau
 
+simple_data_A$PM <- chain_simple_2$summary.results[ ,"Mean"]
+simple_data_A$LL <-  chain_simple_2$summary.results[, "2.5%"]
+simple_data_A$UL <- chain_simple_2$summary.results[, "97.5%"]
+
+  
+at <- seq(min(c(simple_data_A$PM, simple_data_A$LL, simple_data_A$UL)),
+          max(c(simple_data_A$PM, simple_data_A$LL, simple_data_A$UL)),
+          length.out = 8)
+
+popuptable <- leafpop::popupTable(dplyr::mutate_if(simple_data_A,
+                                  is.numeric, round, digits = 2),
+zcol = c("`log(MER2005_40)`", "TEMPAV_8008", "PM", "LL", "UL"),
+row.numbers = FALSE, feature.id = FALSE)
 
 ```
 
@@ -385,4 +398,8 @@ scale) prior for tau2. Defaults to c(1, 0.01).
 rho The value in the interval [0, 1] that the spatial dependence parameter rho is fixed
 at if it should not be estimated. If this arugment is NULL then rho is estimated
 in the model
+
+
+
+
 
