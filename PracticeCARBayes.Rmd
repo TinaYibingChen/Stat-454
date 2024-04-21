@@ -1,0 +1,56 @@
+```{r}
+library(tidycensus)
+library(tidyverse)
+library(maptools)
+library(spdep)
+library(CARBayes)
+
+
+census_api_key("520579d821b3586699177283886bdbf9a5962fb2")
+
+msp <- get_acs(
+  state = "MN",
+  county = "Ramsey",
+  geography = "tract",
+  variables = c("B19013_001", "B01001A_001", "B01001B_001", "B01001C_001", "B01001D_001", "B01001E_001"),
+  geometry = TRUE,
+  year = 2020
+)
+
+msp2 <- msp%>%
+  pivot_wider(names_from = variable, values_from = c(estimate, moe))%>%
+  mutate(estimate_B19013_001 = estimate_B19013_001/1000)
+
+
+vars2020 <- load_variables(2020, "acs5", cache = TRUE)
+
+
+msp2%>%
+  ggplot(aes(fill = estimate_B19013_001))+
+  geom_sf()+
+  ggthemes::theme_map()
+
+W <- nb2mat(poly2nb(msp2), style = "B")
+```
+
+```{r}
+# MCMC parameters
+M.burnin <- 10000       # Number of burn-in iterations (discarded)
+M <- 1000               # Number of iterations retained
+
+# Fit model using CARBayes
+set.seed(444)          # For reproducability
+MCMC <- S.CARbym(
+    formula = estimate_B19013_001 ~ estimate_B01001A_001 + estimate_B01001B_001 + estimate_B01001C_001 + estimate_B01001D_001 + estimate_B01001D_001, 
+    data = msp2,
+    family = "poisson",
+    W = W,
+    burnin = M.burnin,
+    n.sample = M.burnin + M,    # Total iterations
+    verbose = FALSE
+)
+
+# Broad summary of results
+print(MCMC$summary.results)
+```
+
