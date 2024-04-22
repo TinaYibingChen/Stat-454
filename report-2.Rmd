@@ -36,7 +36,7 @@ source('Cleaning.R')
 
 ## Methodology (Tina)
 
-#### Backrgound: Areal Data and neighborhood structure
+#### Background: Areal Data and neighborhood structure
 Areal data differs from point data, which consists of measurements from a known set of geo-spatial points. The boundary of areas can be considered polygons determined by a closed sequence of ordered coordinates connected by straight line segments. 
 
 The essential idea is that the probability of values estimated at any given location are conditional on the level of neighboring values. We assume that nearby locations tend to have similar characteristics or behaviors. Therefore, we need to define what is nearby locations.
