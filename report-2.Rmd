@@ -8,7 +8,6 @@ output:
     toc: yes
     bibliography: Library.bib
     
-abstract: XXX
 ---
 
 ```{r setup, include=FALSE, warning=FALSE}
@@ -24,19 +23,20 @@ knitr::opts_chunk$set(
 source('Cleaning.R')
 ```
 
-## Introduction (Samina)
-  * What is the motivation / goal behind this methodology? When is it useful?
-  * clarify research goal: learn the methodology, then use data to illustrate it (talk about data later in data section)
-  * In research goals, address why Bayesian spatial models might be preferable over non-Bayesian (i.e. motivate your exploration).
- 
-  
+## Introduction 
 
-  
-  
+In many statistical analyses, the assumption of independently and identically distributed (IID) observations is a common starting point. However, this assumption may not always hold true, particularly in contexts where observations exhibit spatial correlation. For example, we might expect that production patterns look more similar for two households in Minnesota and Wisconsin than households in Minnesota and Virginia because Minnesota and Wisconsin have similar climates, and exogenous factors such as weather may impact the production process. In such scenarios, traditional statistical models may fail to capture the underlying spatial dependencies present in the data.
 
-## Methodology (Tina)
+To address this challenge, spatial models offer a solution by explicitly incorporating spatial relationships into the modeling framework. These models acknowledge that observations in nearby locations tend to be more similar to each other than those in distant locations. By accounting for spatial correlation, spatial models provide a more nuanced understanding of the data and can yield more accurate predictions and inferences.
 
-#### Background: Areal Data and neighborhood structure
+Bayesian statistical methods serve as a generally more intuitive and flexible alternative to the more standard frequentist methods. They account for prior knowledge, not just the available data, when generating predictions. This facilitates a refinement process as new data becomes available, allowing us to update our predictions using previous predictions and new data. This process also allows for more intuitive interpretation of probabilities as relative plausibility an event occurs rather than the frequency at which it occurs.
+
+In our paper, we want to investigate the integration of Bayesian methods with spatial modeling techniques, focusing on Bayesian Conditional Autoregressive (CAR) models implemented using the CARBayes and INLA packages. We will demonstrate the superiority of Bayesian spatial models in analyzing spatially correlated data compared to traditional approaches, showing their ability to capture complex spatial relationships and provide more accurate predictions.
+
+## Methodology
+
+### Background: Areal Data and neighborhood structure
+
 Areal data differs from point data, which consists of measurements from a known set of geo-spatial points. The boundary of areas can be considered polygons determined by a closed sequence of ordered coordinates connected by straight line segments. 
 
 The essential idea is that the probability of values estimated at any given location are conditional on the level of neighboring values. We assume that nearby locations tend to have similar characteristics or behaviors. Therefore, we need to define what is nearby locations.
@@ -47,7 +47,7 @@ The most important component of spatial models is the neighborhood structure. Wh
 
 For a set of $N$ areal units, the relationship between areal units is described by an $n \times n$ adjacency matrix $W$. The entries indicate whether two regions $n_i$ and $n_j$ are neighbors, with a value of 1 signifying adjacency and 0 indicating non-adjacency. It's worth noting that in models like Conditional Autoregressive (CAR) models, the neighbor relationship is symmetric, but a region is not considered its own neighbor ($W_{ii} = 0$).
   
-```{r}
+```{r echo=FALSE, fig.width=3, fig.height= 4}
 # neighborhood structure
 centroids <- st_centroid(st_geometry(simple_data_A), of_largest_polygon=TRUE)
 W.nb <- poly2nb(simple_data_A, simple_data_A$grid_id) # using Queen
@@ -58,7 +58,13 @@ ggplot() +
   geom_sf(fill = 'white',color = 'darkgrey') + 
   geom_sf(data = centroids) + 
   geom_sf(data = nb_Q_net) + 
-  theme_classic()
+  theme_classic()+
+  labs(caption = "Visualization of Neighbor Connections")+
+   theme(
+    plot.caption = element_text(color = "grey50")  # Adjust caption text color
+  )
+
+
 
 ```
   
@@ -96,7 +102,7 @@ $$
 $$
 
 
-##### Assumption:
+#### Assumption:
 
 Where $W$ is the $n \times n$ adjacency matrix where entries $\{i,i\}$ are zero and the off-diagonal elements are 1 if regions $i$ and $j$ are neighbors and 0.
 
@@ -113,7 +119,7 @@ $I$ is an $n \times n$ identity matrix
 When $\alpha$ is in the interval $(0,1)$, the covariance matrix $[D_{\tau}(I - \alpha B)]$ is positive definite, thus the joint distribution $\phi$ is proper.
 
 
-###  Likelihood functionL: A Gaussian specification 
+###  Likelihood Function: A Gaussian Specification 
 
 Suppose we have aggregated continuous data $y_1,y_2,...,y_n$ at $n$ locations, and we expect that neighboring locations will have similar data With a Gaussian likelihood:
 
@@ -137,40 +143,44 @@ p(\phi, \beta, \alpha, \tau \mid y) \propto p(y \mid \beta, \phi) p(\phi \mid \a
 \end{split}
 $$
 
+### MCMC
+
+MCMC, or Markov Chain Monte Carlo, is a computational technique sampling from complex probability distributions. By constructing a Markov chain with a stationary distribution equivalent to the target posterior distribution, MCMC iteratively explores the parameter space, generating samples that approximate the desired distribution. The Metropolis-Hastings algorithm, an important MCMC method, proposes new states based on a proposal distribution and acceptance probability.
+
+
 ### INLA
 
 The Integrated Nested Laplace Approximation (INLA) is another method to approximate posterior distributions. It is an alternative to using Monti Carlo Markov Chains (MCMC). The main conceptual difference between the two methodologies is that INLA attempts to approximate marginal posterior distributions for each parameter, whereas MCMC approximates the joint posterior. Because of this, INLA is more computationally efficient, but can be less accurate in some cases. INLA requires that models be expressed as Gaussian Markov Random Fields (GMRF). We approximate our posterior model using both MCMC and INLA methods later on [@INLAreference]. We use the INLA package
 
-## Data analysis
+## Data Analysis
 
-research goal
+Our research delves into the spatial dynamics of economic activity using geographically gridded economic data from the G-Econ Project at Yale University, provided by SEDAC for the years 1990, 1995, and 2000. Focusing on modeling Gross Cell Product (GCP), akin to Gross Domestic Product (GDP), we aim to understand the clustering tendencies and geographic attributes of economic productivity. Given the concentration of economic activity in urban centers and coastal regions, studying GCP patterns is crucial for informing policies and strategies aimed at promoting equitable and sustainable economic development.
 
-  * An introduction the data context (who, what, where, why, when, how) and the data
+#### Research Question
+How do the spatial patterns of Gross Cell Product (GCP) evolve across different regions, and what extent is this variation influenced by population density?
+
+#### Data Overview
   
-  * An introduction to your research question and why it is important
-
-
-#### data overview
-
-  * smaller data points to demo
-  
-```{r}
+```{r echo=FALSE}
 
 pre_log <- simple_data_A %>% filter(POPGPW_2005_40 !=0) %>% 
 ggplot(aes(x=MER2005_40))+
-  geom_density()
+  geom_density()+
+  labs( x = 'Gross Cell Product')
 
 post_log <-simple_data_A %>% filter(POPGPW_2005_40 !=0) %>% 
 ggplot(aes(x=log(MER2005_40)))+
-  geom_density()
+  geom_density()+
+  labs( x = 'log(Gross Cell Product)')
 
 ggarrange(pre_log, post_log, 
           nrow = 1, ncol = 2, labels = c("Pre log","Post log"))
 
-pre_map <- mapview(simple_data_A, zcol = "MER2005_40")
-real <- mapview(simple_data_A, zcol = "log(MER2005_40)")
+pre_map <- mapview(simple_data_A, zcol = "MER2005_40", legend = TRUE,layer.name = "GCT")
 
-pre_post <- leafsync::sync(pre_map,real, ncol = 2) 
+real <- mapview(simple_data_A, zcol = "log(MER2005_40)", legend = TRUE,layer.name = "log(GCT)")
+
+pre_post <- leafsync::sync(pre_map,real, ncol = 2)
 pre_post
 ```
 
@@ -178,72 +188,80 @@ pre_post
 # ggpairs(data = simple_data_A, columns = c(3,9,12,13,14))
 ```
 
+### GLM result 
 
-```{r}
+```{r echo=FALSE}
 
 # form <- `log(MER2005_40)`  ~ dis_to_water + log(POPGPW_2005_40) + TEMPAV_8008 + D3
 # use simpler model
 form <- `log(MER2005_40)`  ~ log(POPGPW_2005_40) 
-
 lm_mod <- lm(formula=form, data = simple_data_A)
 summary(lm_mod)
 
 BIC(lm_mod)
-summary(lm_mod)
-simple_data_A$lm_pred <- predict(lm_mod)
 
-simple_data_A %>% ggplot() +
-  geom_sf(aes(fill = lm_pred)) +
-  scale_fill_gradient2(mid = "white", high = "red", low = "blue") + 
-  theme_classic()
+simple_data_A$lm_pred <- predict(lm_mod)
+# 
+# simple_data_A %>% ggplot() +
+#   geom_sf(aes(fill = lm_pred)) +
+#   scale_fill_gradient2(mid = "white", high = "red", low = "blue") + 
+#   theme_classic()
 
 
 # refined scale 
 
 ```
 
-```{r}
+### Moran's I to Test the Spacial Autocorrelation
 
-# maran I test to test the spacial autocorrelation
+Moran's I is a measure of spatial autocorrelation, commonly used in spatial statistics to assess the degree of clustering or dispersion of a variable across a geographic area. It quantifies the extent to which similar values of a variable are clustered together in space.
+
+```{r echo=FALSE}
 W.list <- nb2listw(W.nb, style="B", zero.policy = TRUE) # list with spatial weights for W.nb
 
-moran.mc(x=residuals(lm_mod), listw=W.list, nsim=1000)
-
+moran.mc(x=residuals(lm_mod), listw=W.list, nsim = 1000)
 ```
 The Moran’s I test has a p-value much less than 0.05, which suggests that the residuals contain substantial positive spatial autocorrelation.
   
-##CARBayes
+## SIMULATION
+
+### CARBayes
 
 We used the CARBayes package, developed by [@CARBayespackage].
 
-```{r}
+Check the Simulation for Car Model
+
+```{r cache=TRUE, include= FALSE }
 W <- nb2mat(W.nb, style="B")
 
 # simulation
 chain <- S.CARleroux(formula = form, data=simple_data_A, family="gaussian", W = W,
       burnin=1000, n.sample=10000, n.chains=3, n.cores=3)
+```
 
 
-summary(chain)
 
-# only has one beta 
 
-plot(chain$samples$phi[,2:4][,1])
-# plot(chain$samples$phi[,2:4][,3])
-plot(chain$samples$beta[,2])
+```{r echo=FALSE}
+# check simulation
+plot1 <- plot(chain$samples$phi[, 2:4][, 1], main = "Trace Plot of Phi")
+plot(chain$samples$beta[,2], main = "Trace Plot of beta")
+plot(chain$samples$rho, main = "Trace Plot of rho")
+plot(chain$samples$tau2, main = "Trace Plot of tau")
 
-# plot(chain$samples$beta[,2:3][,1])
-# plot(chain$samples$beta[,2:3][,2])
-# plot(chain$samples$beta[,2:4][,3])
-plot(chain$samples$rho)
-plot(chain$samples$tau2)
-# check all parameters
 
 # saveRDS()
 
 ```
 
+### CAR Result
 ```{r}
+# coefficient summary
+chain$summary.results
+
+```
+
+```{r include=FALSE}
 y.fit <- chain$samples$fitted
 y.fit <- t(t(y.fit))
 
@@ -270,23 +288,20 @@ row.numbers = FALSE, feature.id = FALSE)
 
 
 m1 <- mapview(simple_data_A, zcol = "CAR", map.types = "CartoDB.Positron",
-              at = at, popup = popuptable)
-m2 <- mapview(simple_data_A, zcol = "LL", map.types = "CartoDB.Positron",
-              at = at, popup = popuptable)
-m3 <- mapview(simple_data_A, zcol = "UL", map.types = "CartoDB.Positron",
-              at = at, popup = popuptable)
+              at = at, popup = popuptable, legend = TRUE,layer.name = "CAR")
 
-lm_model <- mapview(simple_data_A, zcol = "lm_pred", map.types = "CartoDB.Positron",
-              at = at, popup = popuptable)
+# m2 <- mapview(simple_data_A, zcol = "LL", map.types = "CartoDB.Positron",
+#               at = at, popup = popuptable)
+# m3 <- mapview(simple_data_A, zcol = "UL", map.types = "CartoDB.Positron",
+#               at = at, popup = popuptable)
+
+lm_model <- mapview(simple_data_A, zcol = "lm_pred", map.types = "CartoDB.Positron", at = at, popup = popuptable, legend = TRUE,layer.name = "GLM")
 
 real <- mapview(simple_data_A, zcol = "log(MER2005_40)", map.types = "CartoDB.Positron",
-              at = at, popup = popuptable)
+              at = at, popup = popuptable, legend = TRUE,layer.name = "log(GCP)")
 
 
 ```
-
-
-
 
 
 ```{r include=FALSE}
@@ -310,12 +325,19 @@ simple_data_A$PMINLA <- res$summary.fitted.values[, "mean"]
 # simple_data_A$ULINLA <- res$summary.fitted.values[, "0.975quant"]
 
 minla <- mapview(simple_data_A, zcol = "PMINLA", map.types = "CartoDB.Positron",
-              at = at, popup = popuptable)
+              at = at, popup = popuptable, legend = TRUE,layer.name = "INLA")
 ```
 
-```{r}
+### INLA result:(haven't done it yet)
+
+## Final Prediction (Real data, GLM, CAR, INLA )
+```{r echo=FALSE}
 # all map
-m <- leafsync::sync(m1,lm_model, real,minla, ncol = 2) 
+m <- leafsync::sync(real,lm_model, m1, minla, ncol = 2) 
 
 m
 ```
+
+
+## Reference
+
