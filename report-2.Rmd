@@ -41,10 +41,11 @@ Areal data differs from point data, which consists of measurements from a known 
 
 The essential idea is that the probability of values estimated at any given location are conditional on the level of neighboring values. We assume that nearby locations tend to have similar characteristics or behaviors. Therefore, we need to define what is nearby locations.
 
-For a set of $N$ areal units, the relationship between areal units is described by an $n \times n$ adjacency matrix $W$. The entries indicate whether two regions $n_i$ and $n_j$ are neighbors, with a value of 1 signifying adjacency and 0 indicating non-adjacency. It's worth noting that in models like Conditional Autoregressive (CAR) models, the neighbor relationship is symmetric, but a region is not considered its own neighbor ($W_{ii} = 0$).
+### Neighborhood Structure
 
-  * What structure we are using here , for what reasons, present the demo 
-  using Queen: If two polygons touch at all, even at one point, such as a corner, they are neighbors.
+The most important component of spatial models is the neighborhood structure. What does it mean for a region to be considered a "neighbor" of another region? The most important part, and the reason why we include a neighborhood structure, is that "neighbors" are correlated with each other. The value of outcome variable $y_i$ can be explained in part by the value of $y$ amongst the neighbors of region $y_i$. Most often, a Queen neighborhood structure is used. This means that if two regions touch at any point, they are considered neighbors. Without a large amount of data context, this is a fine assumption. We will utilize a Queen neighborhood structure in our analysis. Below we examine the structure of $W$, which represents the neighborhood structure of our data.
+
+For a set of $N$ areal units, the relationship between areal units is described by an $n \times n$ adjacency matrix $W$. The entries indicate whether two regions $n_i$ and $n_j$ are neighbors, with a value of 1 signifying adjacency and 0 indicating non-adjacency. It's worth noting that in models like Conditional Autoregressive (CAR) models, the neighbor relationship is symmetric, but a region is not considered its own neighbor ($W_{ii} = 0$).
   
 ```{r}
 # neighborhood structure
@@ -135,6 +136,10 @@ $$
 p(\phi, \beta, \alpha, \tau \mid y) \propto p(y \mid \beta, \phi) p(\phi \mid \alpha, \tau) p(\alpha) p(\tau) p(\beta)
 \end{split}
 $$
+
+### INLA
+
+The Integrated Nested Laplace Approximation (INLA) is another method to approximate posterior distributions. It is an alternative to using Monti Carlo Markov Chains (MCMC). The main conceptual difference between the two methodologies is that INLA attempts to approximate marginal posterior distributions for each parameter, whereas MCMC approximates the joint posterior. Because of this, INLA is more computationally efficient, but can be less accurate in some cases. INLA requires that models be expressed as Gaussian Markov Random Fields (GMRF). We approximate our posterior model using both MCMC and INLA methods later on. 
 
 ## Data analysis
 
