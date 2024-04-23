@@ -139,7 +139,7 @@ $$
 
 ### INLA
 
-The Integrated Nested Laplace Approximation (INLA) is another method to approximate posterior distributions. It is an alternative to using Monti Carlo Markov Chains (MCMC). The main conceptual difference between the two methodologies is that INLA attempts to approximate marginal posterior distributions for each parameter, whereas MCMC approximates the joint posterior. Because of this, INLA is more computationally efficient, but can be less accurate in some cases. INLA requires that models be expressed as Gaussian Markov Random Fields (GMRF). We approximate our posterior model using both MCMC and INLA methods later on. 
+The Integrated Nested Laplace Approximation (INLA) is another method to approximate posterior distributions. It is an alternative to using Monti Carlo Markov Chains (MCMC). The main conceptual difference between the two methodologies is that INLA attempts to approximate marginal posterior distributions for each parameter, whereas MCMC approximates the joint posterior. Because of this, INLA is more computationally efficient, but can be less accurate in some cases. INLA requires that models be expressed as Gaussian Markov Random Fields (GMRF). We approximate our posterior model using both MCMC and INLA methods later on [@INLAreference]. We use the INLA package
 
 ## Data analysis
 
@@ -212,7 +212,10 @@ moran.mc(x=residuals(lm_mod), listw=W.list, nsim=1000)
 ```
 The Moran’s I test has a p-value much less than 0.05, which suggests that the residuals contain substantial positive spatial autocorrelation.
   
-  
+##CARBayes
+
+We used the CARBayes package, developed by [@CARBayespackage].
+
 ```{r}
 W <- nb2mat(W.nb, style="B")
 
