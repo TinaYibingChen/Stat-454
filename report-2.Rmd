@@ -6,7 +6,7 @@ output:
    prettydoc::html_pretty:
     theme: cayman
     toc: yes
-    bibliography: Library.bib
+bibliography: Library.bib
     
 ---
 
@@ -37,13 +37,13 @@ In our paper, we want to investigate the integration of Bayesian methods with sp
 
 ### Background: Areal Data and neighborhood structure
 
-Areal data differs from point data, which consists of measurements from a known set of geo-spatial points. The boundary of areas can be considered polygons determined by a closed sequence of ordered coordinates connected by straight line segments. 
+Areal data differs from point data, which consists of measurements from a known set of geospatial points. The boundary of areas can be considered polygons determined by a closed sequence of ordered coordinates connected by straight line segments. 
 
-The essential idea is that the probability of values estimated at any given location are conditional on the level of neighboring values. We assume that nearby locations tend to have similar characteristics or behaviors. Therefore, we need to define what is nearby locations.
+The essential idea is that the probability of values estimated at any given location is conditional on the level of neighboring values. We assume that nearby locations tend to have similar characteristics or behaviors. Therefore, we need to define the nearby locations.
 
 ### Neighborhood Structure
 
-The most important component of spatial models is the neighborhood structure. What does it mean for a region to be considered a "neighbor" of another region? The most important part, and the reason why we include a neighborhood structure, is that "neighbors" are correlated with each other. The value of outcome variable $y_i$ can be explained in part by the value of $y$ amongst the neighbors of region $y_i$. Most often, a Queen neighborhood structure is used. This means that if two regions touch at any point, they are considered neighbors. Without a large amount of data context, this is a fine assumption. We will utilize a Queen neighborhood structure in our analysis. Below we examine the structure of $W$, which represents the neighborhood structure of our data.
+The most important component of spatial models is the neighborhood structure. What does it mean for a region to be considered a "neighbor" of another region? The most important part, and the reason why we include a neighborhood structure, is that "neighbors" are correlated with each other. The value of outcome variable $Y_i$ can be explained in part by the value of $Y$ amongst the neighbors of region $Y_i$. Most often, a Queen neighborhood structure is used. This means that if two regions touch at any point, they are considered neighbors. Without a large amount of data context, this is a fine assumption. We will utilize a Queen neighborhood structure in our analysis. Below, we examine the structure of $W$, which represents the neighborhood structure of our data.
 
 For a set of $N$ areal units, the relationship between areal units is described by an $n \times n$ adjacency matrix $W$. The entries indicate whether two regions $n_i$ and $n_j$ are neighbors, with a value of 1 signifying adjacency and 0 indicating non-adjacency. It's worth noting that in models like Conditional Autoregressive (CAR) models, the neighbor relationship is symmetric, but a region is not considered its own neighbor ($W_{ii} = 0$).
   
@@ -61,87 +61,114 @@ ggplot() +
   theme_classic()+
   labs(caption = "Visualization of Neighbor Connections")+
    theme(
-    plot.caption = element_text(color = "grey50")  # Adjust caption text color
+    plot.caption = element_text(color = "grey50") 
   )
-
-
 
 ```
   
-### Conditional Autoregressive (CAR) priors for spatial random effects
-
-
-$\phi$, an n-length vector $\phi = (\phi_1, ..., \phi_n)^T$, is the spatial random variables that can represent spatial interactions between $n_i$ and $n_j$.
-
-In the full conditional distribution, each $\phi_i$ is conditional on the sum of the weighted values of its neighbors, and has unknown variance.
-$$
-\begin{split}
- 
- \phi_i | \phi_j ,j \neq i, 
- &\sim N (\sum\limits_{j=1}^n b_{ij} \phi_j, \tau_i^{-1})\\ 
- 
-\end{split}
-$$
-Where $\tau_i$ is a spatially varying precision parameter, and $b_{ii} = 0$.
-
-The summation term in this expression is simply the weighted sum of the mean adjusted $\rho$ at all other locations $j$ - this may or may not be a reasonable assumption for a particular problem under consideration.
-
-By Brook's Lemme, the joint distribution fo $\phi$ is then:
-$$
-\begin{split}
- \phi &\sim N(0, [D_{\tau}(I - \alpha B)]^{-1})\\
- \end{split}
-$$
-
-then the CAR prior specification simplifies to:
-
-$$
-\begin{split}
- \phi &\sim N(0, [\tau (D- \alpha W)]^{-1})\\
- \end{split}
-$$
-
-
-#### Assumption:
-
-Where $W$ is the $n \times n$ adjacency matrix where entries $\{i,i\}$ are zero and the off-diagonal elements are 1 if regions $i$ and $j$ are neighbors and 0.
-
-$D$ is the $n \times n$ diagonal matrix where entries $\{i,i\}$ are the number of neighbors of region $i$ and the off-diagonal entries are 0.
-
-$D_{\tau} = \tau D$
-
-$\alpha$ controls the amount of spatial correlation parameter that determines the size and nature (positive or negative) of the spatial neighborhood effect; $\alpha = 0$ implies spatial independence and $\alpha = 1$ implies complete spatial correlation. 
-
-$B$ is the scaled adjacency matrix $D^{-1}W$
-
-$I$ is an $n \times n$ identity matrix
- 
-When $\alpha$ is in the interval $(0,1)$, the covariance matrix $[D_{\tau}(I - \alpha B)]$ is positive definite, thus the joint distribution $\phi$ is proper.
 
 
 ###  Likelihood Function: A Gaussian Specification 
 
-Suppose we have aggregated continuous data $y_1,y_2,...,y_n$ at $n$ locations, and we expect that neighboring locations will have similar data With a Gaussian likelihood:
+Suppose we have aggregated continuous data $Y_1, Y_2, \ldots, Y_n$ at $n$ locations, and we expect that neighboring locations will have similar data With a *Gaussian likelihood*.
+
+The spatial variation in the response is modeled by a matrix of covariates $X$ and a spatial structure component $\phi$, the latter of which is included to model any spatial autocorrelation that remains in the data after the covariate effects have been accounted for. 
 
 $$
 \begin{split}
-y_i \sim \text{N}\left(X_i \beta + \phi_i \right)
+Y_i &\sim \mathcal{N}(\mu_i, \nu^2) \\
+\text{where} \quad \mu_i &= X_i \beta + \phi_i \\
+\text{for} \quad i &= 1, \ldots, n 
 \end{split}
+
 $$
 
-Where $X_i$ is a design vector (the $i^{th}$ row from a design matrix), $\beta$ is a vector of coefficients, $\phi_i$ is a spatial adjustment.
+Where
+
+ * $Y_i$ represents a random variable that follows a Gaussian distribution distributed with mean $\mu_i$ and variance $\nu^2$.
+ 
+ * $\beta$ is a $p$-length vector of coefficients
+ 
+ * $X_i$, is a $n \times p$  matrix of predictors (covariates) associated with the each of the areal units, the first column corresponds to an intercept term. $p$ refers to the number of coefficients. 
+ 
+ 
+ * $\phi$, an n-length vector $\phi = (\phi_1, ..., \phi_n)^T$, is the spatial random variables that can represent spatial interactions between $n_i$ and $n_j$.
   
   
 
 
-### Complete Bayesian Specification
+### Instinct Conditional Autoregressive (ICAR) priors for spatial random effects
 
-Our posterior distribution is:
+The spatial structure component $\phi_i$ can be written as $\phi \sim \text{N}(0, \tau^2 Q(W)^{-1})$. This formulation captures the spatial autocorrelation structure of the data by incorporating the spatial precision matrix $Q$ and the variance parameter $\tau^2$. It assumes that the spatial random effects follow a multivariate Gaussian distribution with mean 0 and covariance matrix $\tau^2 Q(W)^{-1}$. The precision matrix $Q$ controls the spatial autocorrelation structure of the random effects, based on the non-negative symmetric adjacency matrix $W$.
+
+
 $$
 \begin{split}
-p(\phi, \beta, \alpha, \tau \mid y) \propto p(y \mid \beta, \phi) p(\phi \mid \alpha, \tau) p(\alpha) p(\tau) p(\beta)
+\phi &\sim \text{MVN}(0, \tau^2 Q(W)^{-1})
 \end{split}
 $$
+
+An Intrinsic Conditional Auto-Regressive (ICAR) model assumes a complete spatial correlation between regions. In the ICAR model, the precision matrix $Q(W)$ can be defined as:
+
+$$
+\begin{split}
+Q(W) &= D-\rho W\\
+\text{Where} \;\; \rho &=1 \;\; \text{in ICAR}
+\end{split}
+$$
+ 
+ Where
+ 
+ * $W$ is the $n \times n$ adjacency matrix where entries $\{i,i\}$ are zero and the off-diagonal elements are 1 if regions $i$ and $j$ are neighbors and 0.
+
+ * $D$ is the $n \times n$ diagonal matrix where entries $\{i,i\}$ are the number of neighbors of region $i$ and the off-diagonal entries are 0.
+ 
+ * The parameter $\rho$ controls the strength of spatial autocorrelation. Based on the assumption of the complete spatial correlation between regions, it is 1 in ICAR.
+
+In the context of ICAR, the matrix $Q$ is singular, meaning it cannot be used directly to model the data in a Frequentist approach. However, it can be used as a prior within a hierarchical Bayesian model by imposing a constraint that ensures the sum of each row equals zero.
+
+The corresponding conditional distribution specification for $\phi$ is:
+
+$$
+\begin{split}
+\phi_i|\phi_{-i}, W, \tau^2, \rho &\sim \mathcal{N}\left(\frac{\rho\sum_{j=1}^n w_{ij} \phi_j}{\rho\sum_{j=1}^n w_{ij} + 1 - \rho}, \frac{\tau^2}{\rho\sum_{j=1}^n w_{ij} + 1 - \rho}\right) \\  
+\text{Where} \; \rho &= 1 \; \; \text{in ICAR}
+\end{split}
+
+$$
+
+The conditional expectation is calculated as the average of the random effects in neighboring areas, while the conditional variance is inversely proportional to the number of neighbors. This approach is suitable because when random effects exhibit strong spatial autocorrelation, areas with more neighbors benefit from increased information about their random effect values from neighboring areas. Consequently, this increased information reduces uncertainty [@CARBayespackage]. 
+
+
+
+
+### Complete Bayesian Model
+
+$$
+\begin{split}
+\text{Likelihood} \;\; Y_i &\sim \text{N}(\mu_i , \nu^2) \quad  \text{where } \;\; \mu_i = X_i \beta + \phi_i \\
+
+\text{Prior} \;\; \beta &\sim \text{N}(\mu_\beta, \Sigma_\beta) \\
+
+\phi_i|\phi_{-i}, W, \tau^2, &\sim \text{N}\left(\frac{\sum_{j=1}^n w_{ij} \phi_j}{\sum_{j=1}^n w_{ij}}, \frac{\tau^2}{\sum_{j=1}^n w_{ij} \phi_j}\right) \\
+
+\nu^2 &\sim \text{Inverse-Gamma}(1, 0.01) \\
+\tau^2 &\sim \text{Inverse-Gamma}(1, 0.01) \\
+\end{split}
+$$
+
+The posterior distribution of the parameters $\beta$,$\phi$,$\nu^2$, and $\tau^2$ given the observed data $Y_i$ can be expressed as:
+
+$$
+\begin{split}
+p(\phi, \beta, \tau^2 ,\nu^2 \mid Y_i) &\propto prior \cdot likelihood \\
+&= p(\beta) p(\phi \mid  \tau^2) p(\tau^2)  p(\nu^2) p(Y_i \mid \beta, \phi, \nu^2)
+\end{split}
+$$
+
+
+
+
 
 ### MCMC
 
@@ -200,6 +227,7 @@ summary(lm_mod)
 
 BIC(lm_mod)
 
+
 simple_data_A$lm_pred <- predict(lm_mod)
 # 
 # simple_data_A %>% ggplot() +
@@ -234,9 +262,12 @@ Check the Simulation for Car Model
 ```{r cache=TRUE, include= FALSE }
 W <- nb2mat(W.nb, style="B")
 
-# simulation
-chain <- S.CARleroux(formula = form, data=simple_data_A, family="gaussian", W = W,
+# simulation, set rho = 1 
+chain <- S.CARleroux(formula = form, data=simple_data_A, family="gaussian", W = W,rho=1,
       burnin=1000, n.sample=10000, n.chains=3, n.cores=3)
+
+
+
 ```
 
 
@@ -246,7 +277,6 @@ chain <- S.CARleroux(formula = form, data=simple_data_A, family="gaussian", W = 
 # check simulation
 plot1 <- plot(chain$samples$phi[, 2:4][, 1], main = "Trace Plot of Phi")
 plot(chain$samples$beta[,2], main = "Trace Plot of beta")
-plot(chain$samples$rho, main = "Trace Plot of rho")
 plot(chain$samples$tau2, main = "Trace Plot of tau")
 
 
@@ -260,6 +290,7 @@ plot(chain$samples$tau2, main = "Trace Plot of tau")
 chain$summary.results
 
 ```
+
 
 ```{r include=FALSE}
 y.fit <- chain$samples$fitted
@@ -304,10 +335,9 @@ real <- mapview(simple_data_A, zcol = "log(MER2005_40)", map.types = "CartoDB.Po
 ```
 
 
+
 ```{r include=FALSE}
 # INLA
-
-
 nb2INLA("map.adj", W.nb)
 g <- inla.read.graph(filename = "map.adj")
 
@@ -328,15 +358,72 @@ minla <- mapview(simple_data_A, zcol = "PMINLA", map.types = "CartoDB.Positron",
               at = at, popup = popuptable, legend = TRUE,layer.name = "INLA")
 ```
 
+```{r}
+MAE_MCMC_calculation <- 1/length(simple_data_A$CAR)*(sum(simple_data_A$`log(MER2005_40)`- simple_data_A$CAR))
+MAE_GLM_calculation <- 1/length(simple_data_A$lm_pred)*(sum(simple_data_A$`log(MER2005_40)`- simple_data_A$lm_pred))
+MAE_INLA_calculation <- 1/length(simple_data_A$PMINLA)*(sum(simple_data_A$`log(MER2005_40)`- simple_data_A$PMINLA))
+MAE_MCMC_calculation
+MAE_GLM_calculation
+MAE_INLA_calculation
+
+```
+
+
 ### INLA result:(haven't done it yet)
+
 
 ## Final Prediction (Real data, GLM, CAR, INLA )
 ```{r echo=FALSE}
 # all map
 m <- leafsync::sync(real,lm_model, m1, minla, ncol = 2) 
-
 m
 ```
+
+
+### Limitation
+
+
+## Conclusion
+  we got similar results...
+
+
+
+
+## Appendenx
+
+Here is a simple demonstration for $Y = X \beta + \phi$：
+
+$$
+\begin{split}
+\begin{bmatrix}
+\mu_{1} \\
+\mu_{2}
+\end{bmatrix}
+=
+\begin{bmatrix}
+1 & X_{1,1} & X_{1,2} \\
+1 & X_{2,1} & X_{2,2}
+\end{bmatrix}
+\begin{bmatrix}
+\beta_{0} \\
+\beta_{1} \\
+\beta_{2}
+\end{bmatrix}
++
+\begin{bmatrix}
+\phi_{1} \\
+\phi_{2}
+\end{bmatrix}
+=
+\begin{bmatrix}
+\beta_{0} + \beta_{1}X_{1,1} + \beta_{2}X_{1,2} + \phi_1 \\
+\beta_{0} + \beta_{1}X_{2,1} + \beta_{2}X_{2,2} + \phi_2
+\end{bmatrix}
+\end{split}
+$$
+
+a small demo for  Q
+
 
 
 ## Reference
