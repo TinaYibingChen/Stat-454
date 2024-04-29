@@ -157,7 +157,7 @@ $$
 \end{split}
 $$
 
-The posterior distribution of the parameters $\beta$,$\phi$,$\nu^2$, and $\tau^2$ given the observed data $Y_i$ can be expressed as:
+The posterior distribution of the parameters $\beta$, $\phi$, $\nu^2$, and $\tau^2$ given the observed data $Y_i$ can be expressed as:
 
 $$
 \begin{split}
@@ -177,16 +177,16 @@ MCMC, or Markov Chain Monte Carlo, is a computational technique sampling from co
 
 ### INLA
 
-The Integrated Nested Laplace Approximation (INLA) is another method to approximate posterior distributions. It is an alternative to using Monti Carlo Markov Chains (MCMC). The main conceptual difference between the two methodologies is that INLA attempts to approximate marginal posterior distributions for each parameter, whereas MCMC approximates the joint posterior. Because of this, INLA is more computationally efficient, but can be less accurate in some cases. INLA requires that models be expressed as Gaussian Markov Random Fields (GMRF). We approximate our posterior model using both MCMC and INLA methods later on [@INLAreference]. We use the INLA package
+The Integrated Nested Laplace Approximation (INLA) is another method to approximate posterior distributions. It is an alternative to using Monti Carlo Markov Chains (MCMC). The main conceptual difference between the two methodologies is that INLA attempts to approximate marginal posterior distributions for each parameter, whereas MCMC approximates the joint posterior. Because of this, INLA is more computationally efficient, but can be less accurate in some cases. INLA requires that models be expressed as Gaussian Markov Random Fields (GMRF). We approximate our posterior model using both MCMC and INLA methods later on [@INLAreference]. 
 
 ## Data Analysis
 
 Our research delves into the spatial dynamics of economic activity using geographically gridded economic data from the G-Econ Project at Yale University, provided by SEDAC for the years 1990, 1995, and 2000. Focusing on modeling Gross Cell Product (GCP), akin to Gross Domestic Product (GDP), we aim to understand the clustering tendencies and geographic attributes of economic productivity. Given the concentration of economic activity in urban centers and coastal regions, studying GCP patterns is crucial for informing policies and strategies aimed at promoting equitable and sustainable economic development.
 
-#### Research Question
+### Research Question
 How do the spatial patterns of Gross Cell Product (GCP) evolve across different regions, and what extent is this variation influenced by population density?
 
-#### Data Overview
+### Data Overview
   
 ```{r echo=FALSE}
 
@@ -259,7 +259,7 @@ We used the CARBayes package, developed by [@CARBayespackage].
 
 Check the Simulation for Car Model
 
-```{r cache=TRUE, include= FALSE }
+```{r include= FALSE }
 W <- nb2mat(W.nb, style="B")
 
 # simulation, set rho = 1 
