@@ -1,0 +1,516 @@
+---
+title: "Examining a Bayesian Approach to Spatial Modeling"
+author: "Tina Chen, Kyle Suelflow, Samina Stack"
+date: "`r format(Sys.Date(),'%e %B, %Y')`"
+output:
+   prettydoc::html_pretty:
+    theme: cayman
+    toc: yes
+bibliography: Library.bib
+editor_options:
+  markdown:
+    wrap: 72
+    
+---
+
+```{r setup, include=FALSE, warning=FALSE}
+
+knitr::opts_chunk$set(
+  collapse = TRUE, 
+  warning = FALSE,
+  message = FALSE,
+  fig.height = 2.75, 
+  fig.width = 4.25,
+  fig.align = 'center')
+
+source('Cleaning.R')
+```
+
+## Introduction 
+
+In many statistical analyses, the assumption of independently and identically distributed (I.I.D) observations is a common starting point. However, this assumption may not always hold true, particularly in contexts where observations exhibit spatial correlation. For example, we might expect that production patterns look more similar for two households in Minnesota and Wisconsin than households in Minnesota and Virginia because Minnesota and Wisconsin have similar climates, and exogenous factors such as weather may impact the production process. In such scenarios, traditional statistical models may fail to capture the underlying spatial dependencies present in the data.
+
+To address this challenge, spatial models offer a solution by explicitly incorporating spatial relationships into the modeling framework. These models acknowledge that observations in nearby locations tend to be more similar to each other than those in distant locations. By accounting for spatial correlation, spatial models provide a more nuanced understanding of the data and can yield more accurate predictions and inferences.
+
+Bayesian statistical methods serve as a generally more intuitive and flexible alternative to the more standard frequentist methods. They account for prior knowledge, not just the available data, when generating predictions. This facilitates a refinement process as new data becomes available, allowing us to update our predictions using previous predictions and new data. This process also allows for a more intuitive interpretation of probabilities as the relative plausibility of an event occurs rather than the frequency at which it occurs.
+
+In our paper, we want to investigate the integration of Bayesian methods with spatial modeling techniques, focusing on Bayesian Conditional Autoregressive (CAR) [@schmidt2014conditional] models implemented using the CARBayes and INLA packages. We will demonstrate these methods using economic data from the western US and evaluate similarities and differences between methods.
+
+## Methodology
+
+### Background: Areal Data and Neighborhood Structure
+
+Areal data differs from point data, which consists of measurements from a known set of geospatial points. The boundary of areas can be considered polygons determined by a closed sequence of ordered coordinates connected by straight line segments. [@moraga2019geospatial]
+
+The essential idea is that the probability of values estimated at any given location is conditional on the level of neighboring values. We assume that nearby locations tend to have similar characteristics or behaviors. Therefore, we need to define the nearby locations.
+
+### Neighborhood Structure
+
+The most important component of spatial models is the neighborhood structure. What does it mean for a region to be considered a "neighbor" of another region? The most important part, and the reason why we include a neighborhood structure, is that "neighbors" are correlated with each other. The value of outcome variable $Y_i$ can be explained in part by the value of $Y$ amongst the neighbors of region $Y_i$. Most often, a Queen neighborhood structure is used. This means that if two regions touch at any point, they are considered neighbors. Without a large amount of data context, this is a fine assumption. We will utilize a Queen neighborhood structure in our analysis. Below, we examine the structure of $W$, which represents the neighborhood structure of our data.[@anselin2013spatial]
+
+For a set of $N$ areal units, the relationship between areal units is described by an $n \times n$ adjacency matrix $W$. The entries indicate whether two regions $n_i$ and $n_j$ are neighbors, with a value of 1 signifying adjacency and 0 indicating non-adjacency. It's worth noting that in models like Conditional Autoregressive (CAR) models, the neighbor relationship is symmetric, but a region is not considered its own neighbor ($W_{ii} = 0$).
+  
+```{r echo=FALSE, fig.width=3, fig.height= 4}
+# neighborhood structure
+centroids <- st_centroid(st_geometry(simple_data_A), of_largest_polygon=TRUE)
+W.nb <- poly2nb(simple_data_A, simple_data_A$grid_id) # using Queen
+nb_Q_net <- nb2lines(nb = W.nb, coords = centroids, as_sf = TRUE)
+
+simple_data_A %>%
+ggplot() + 
+  geom_sf(fill = 'white',color = 'darkgrey') + 
+  geom_sf(data = centroids) + 
+  geom_sf(data = nb_Q_net) + 
+  theme_classic()+
+  labs(caption = "Visualization of Neighbor Connections",
+       title ="Queen Neighborhood")+
+   theme(
+    plot.caption = element_text(color = "grey50") 
+  )
+
+```
+  
+
+
+###  Likelihood Function: A Gaussian Specification 
+
+Suppose we have aggregated continuous data $Y_1, Y_2, \ldots, Y_n$ at $n$ locations, and we expect that neighboring locations will have similar data With a *Gaussian likelihood*.
+
+The spatial variation in the response is modeled by a matrix of covariates $X$ and a spatial structure component $\phi$, the latter of which is included to model any spatial autocorrelation that remains in the data after the covariate effects have been accounted for. 
+
+$$
+\begin{split}
+Y_i &\sim \mathcal{N}(\mu_i, \nu^2) \\
+\text{where} \quad \mu_i &= X_i \beta + \phi_i \\
+\text{for} \quad i &= 1, \ldots, n 
+\end{split}
+$$
+
+Where
+
+ * $Y_i$ represents a random variable that follows a Gaussian distribution distributed with mean $\mu_i$ and variance $\nu^2$.
+ 
+ * $\beta$ is a p-length vector of coefficients
+ 
+ * $X_i$, is a $n \times p$  matrix of predictors (covariates) associated with the each of the areal units, the first column corresponds to an intercept term. $p$ refers to the number of coefficients. 
+ 
+ 
+ * $\phi$, an n-length vector $\phi = (\phi_1, ..., \phi_n)^T$, is the spatial random variables that can represent spatial interactions between $n_i$ and $n_j$.
+  
+
+
+
+### Instinct Conditional Autoregressive (ICAR) Priors For Spatial Random Effects
+
+The spatial structure component $\phi_i$ can be written as $\phi \sim \text{N}(0, \tau^2 Q(W)^{-1})$. This formulation captures the spatial autocorrelation structure of the data by incorporating the spatial precision matrix $Q$ and the variance parameter $\tau^2$. It assumes that the spatial random effects follow a multivariate Gaussian distribution with mean 0 and covariance matrix $\tau^2 Q(W)^{-1}$. The precision matrix $Q$ controls the spatial autocorrelation structure of the random effects, based on the non-negative symmetric adjacency matrix $W$.
+
+
+$$
+\begin{split}
+\phi &\sim \text{MVN}(0, \tau^2 Q(W)^{-1})
+\end{split}
+$$
+
+An Intrinsic Conditional Auto-Regressive (ICAR) model assumes a complete spatial correlation between regions. In the ICAR model, the precision matrix $Q(W)$ can be defined as:
+
+$$
+\begin{split}
+Q(W) &= D-\rho W\\
+\text{Where} \;\; \rho &=1 \;\; \text{in ICAR}
+\end{split}
+$$
+ 
+ Where
+ 
+ * $W$ is the $n \times n$ adjacency matrix where entries $\{i,i\}$ are zero and the off-diagonal elements are 1 if regions $i$ and $j$ are neighbors and 0.
+
+ * $D$ is the $n \times n$ diagonal matrix where entries $\{i,i\}$ are the number of neighbors of region $i$ and the off-diagonal entries are 0.
+ 
+ * The parameter $\rho$ controls the strength of spatial autocorrelation. Based on the assumption of the complete spatial correlation between regions, it is 1 in ICAR.
+
+In the context of ICAR, the matrix $Q$ is singular, meaning it cannot be used directly to model the data in a Frequentist approach. However, it can be used as a prior within a hierarchical Bayesian model by imposing a constraint that ensures the sum of each row equals zero.
+
+The corresponding conditional distribution specification for $\phi$ is:
+
+$$
+\begin{split}
+\phi_i|\phi_{-i}, W, \tau^2, \rho &\sim \mathcal{N}\left(\frac{\rho\sum_{j=1}^n w_{ij} \phi_j}{\rho\sum_{j=1}^n w_{ij} + 1 - \rho}, \frac{\tau^2}{\rho\sum_{j=1}^n w_{ij} + 1 - \rho}\right) \\  
+\text{Where} \; \rho &= 1 \; \; \text{in ICAR}
+\end{split}
+$$
+
+The conditional expectation is calculated as the average of the random effects in neighboring areas, while the conditional variance is inversely proportional to the number of neighbors. This approach is suitable because when random effects exhibit strong spatial autocorrelation, areas with more neighbors benefit from increased information about their random effect values from neighboring areas. Consequently, this increased information reduces uncertainty [@CARBayespackage]. 
+
+
+
+
+### Complete Bayesian Model
+
+$$
+\begin{split}
+\text{Likelihood} \;\; Y_i &\sim \mathcal{N}(\mu_i , \nu^2) \quad  \text{where } \;\; \mu_i = X_i \beta + \phi_i \\
+\text{Prior} \;\; \beta &\sim \mathcal{N}(\mu_\beta, \Sigma_\beta) \\
+\phi_i|\phi_{-i}, W, \tau^2, &\sim \mathcal{N}\left(\frac{\sum_{j=1}^n w_{ij} \phi_j}{\sum_{j=1}^n w_{ij}}, \frac{\tau^2}{\sum_{j=1}^n w_{ij} \phi_j}\right) \\
+\nu^2 &\sim \text{Inverse-Gamma}(1, 0.01) \\
+\tau^2 &\sim \text{Inverse-Gamma}(1, 0.01) \\
+\end{split}
+$$
+
+The posterior distribution of the parameters $\beta$, $\phi$, $\nu^2$, and $\tau^2$ given the observed data $Y_i$ can be expressed as:
+
+$$
+\begin{split}
+p(\phi, \beta, \tau^2 ,\nu^2 \mid Y_i) &\propto prior \cdot likelihood \\
+&= p(\beta) \cdot p(\phi \mid  \tau^2) \cdot p(\tau^2) \cdot p(\nu^2)\cdot p(Y_i \mid \beta, \phi, \nu^2)
+\end{split}
+$$
+
+## Data Analysis
+
+To demonstrate the methodology described above, we analyze the spatial dynamics of economic activity using geographically gridded economic data from the G-Econ Project at Yale University, provided by SEDAC for the years 1990, 1995, and 2000. Specifically, we look at how the spatial patterns of Gross Cell Product (GCP), similar to Gross Domestic Product (GDP), evolve across different regions, and to what extent this variation may be influenced by population density. Focusing on modeling GCP, we aim to understand the clustering tendencies of economic productivity. Given the concentration of economic activity in urban centers and coastal regions, studying GCP patterns is crucial for informing policies and strategies aimed at promoting equitable and sustainable economic development.
+
+
+### Data Overview
+
+Our main variables of interest in this analysis are GCP and population density. Since raw GCP is heavily right-skewed with a mode around zero, so we log it to make it more normally distributed. 
+
+We can see from the plot below that in the far Western United States, GCP tends to be highest around metropolitan areas like Seattle, San Francisco, and Los Angeles. Metropolitan areas are generally defined as having a large population nucleus of at least 50,000 people, and surrounding areas with a high degree of economic and social integration with that nucleus [@klove1952definition]. This supports our interest in population density as a predictor in our model. Though population density for a given metropolitan area may be offset by the area's size, the two should be highly correlated. This implies that population density may be similarly related to GCP, especially considering our constant grid size.
+  
+```{r echo=FALSE}
+#, fig.width = 10, fig.height = 6
+post_log <-simple_data_A%>% 
+  filter(POPGPW_2005_40 !=0) %>% 
+  ggplot(aes(x=log(MER2005_40)))+
+  geom_density()+
+  labs(x = 'log(Gross Cell Product)', y = "Density", title = "Distribution of the log(GCP)")+
+  theme(legend.position = "none",
+        plot.title = element_text(size = 16, face = "bold"))+
+  theme_classic()
+
+post_log
+
+```
+
+<center>
+```{r echo=FALSE,  fig.align = 'center'}
+real <- mapview(simple_data_A, zcol = "log(MER2005_40)", legend = TRUE,layer.name = "log(GCP)")
+
+real
+```
+</center>
+
+```{r echo=FALSE}
+
+#  model
+form <- `log(MER2005_40)`  ~ log(POPGPW_2005_40) 
+lm_mod <- lm(formula=form, data = simple_data_A)
+sum <- summary(lm_mod)
+coefs <- as.data.frame(sum$coefficients)
+
+simple_data_A$lm_pred <- predict(lm_mod)
+
+
+```
+
+### Moran's I to Test the Spacial Autocorrelation
+
+Moran's I is a measure of spatial autocorrelation, commonly used in spatial statistics to assess the degree of clustering (+1) or dispersion (-1) of a variable across a geographic area. It helps us understand whether nearby locations tend to have similar values of the variable being studied.
+
+```{r echo=FALSE}
+W.list <- nb2listw(W.nb, style="B", zero.policy = TRUE) # list with spatial weights for W.nb
+
+moran <- moran.mc(x=residuals(lm_mod), listw=W.list, nsim = 1000)
+moran_df <- data.frame(`p value` = moran$p.value, statistic = moran$statistic)
+
+knitr::kable(moran_df, format = "html")
+```
+
+A positive Moran's I value suggests spatial clustering, meaning that nearby locations tend to have similar values. And a low p-value (much less than 0.05) suggests that there is a significant spatial pattern in our data. Therefore, having a model incorporating spatial autocorrelation would be better.
+
+## SIMULATION
+
+In order to approximate the posterior distribution of bayesian spatial models, we need to use simulation techniques. We explore two of these techniques, MCMC and INLA, below.
+
+### MCMC
+
+MCMC, or Markov Chain Monte Carlo, is a computational technique sampling from complex probability distributions. By constructing a Markov chain with a stationary distribution equivalent to the target posterior distribution, MCMC iteratively explores the parameter space, generating samples that approximate the desired distribution. The Metropolis-Hastings algorithm [@chib1995understanding], an important MCMC method, proposes new states based on a proposal distribution and acceptance probability.
+
+### INLA
+
+The Integrated Nested Laplace Approximation (INLA) is another method to approximate posterior distributions. It is an alternative to using MCMC. The main conceptual difference between the two methodologies is that INLA attempts to approximate marginal posterior distributions for each parameter, whereas MCMC approximates the joint posterior. Because of this, INLA is more computationally efficient, but can be less accurate in some cases. INLA requires that models be expressed as Gaussian Markov Random Fields (GMRF). We approximate our posterior model using both MCMC and INLA methods later on [@INLAreference]. 
+
+### CARBayes (MCMC)
+
+We used the CARBayes package, developed by [@CARBayespackage]. Shown below are trace and density plots for $\beta$, $\phi$, and $\tau^2$. The trace plots behavior appears random, and those three chains produce nearly indistinguishable posterior approximations, indicating we have a stable MCMC simulation. The quality of our simulation means that we can move forward with our analysis to analyze the model results.
+
+
+```{r include= FALSE }
+W <- nb2mat(W.nb, style="B")
+
+# simulation, set rho = 1 
+chain <- S.CARleroux(formula = form, data=simple_data_A, family="gaussian", W = W,rho=1,
+      burnin=1000, n.sample=10000, n.chains=3, n.cores=3)
+```
+
+```{r echo=FALSE, fig.width = 10, fig.height = 3}
+#Phi Data
+phi_1 <- chain$samples$phi[, 2:4][, 1][[1]]
+phi_2 <- chain$samples$phi[, 2:4][, 1][[2]]
+phi_3 <- chain$samples$phi[, 2:4][, 1][[3]]
+iteration <- 1:9000
+phi_data <- data.frame(chain_1 = phi_1, chain_2 = phi_2, chain_3 = phi_3, iteration = iteration)
+
+#Phi TracePlot
+phi_trace <- phi_data %>%
+  ggplot(aes(x = iteration))+
+  geom_line(aes(y = var1.1), color = "#F7756D")+
+  geom_line(aes(y = var1.2), color = "#05BB38")+
+  geom_line(aes(y = var1), color = "#97A5EA")+
+  theme_classic() +
+  labs(x = "Iteration", y = "Phi", title = "Phi Trace Plot with 3 Chains") +
+  theme(legend.position = "none",  # Remove legend entirely
+        plot.title = element_text(size = 16, face = "bold"))+
+  theme_classic()
+
+
+
+#Phi Density
+phi_density <- phi_data%>%
+  pivot_longer(names_to = "Chain", values_to = "Estimate", cols = !iteration)%>%
+  ggplot(aes(x = Estimate))+
+  geom_density()+
+  labs(x = "Phi", y = "Density", title = "Density Plot of Phi across 3 Chains",
+       legend = NULL)+
+  theme(legend.position = "none",
+        plot.title = element_text(size = 16, face = "bold"))+
+    theme_classic()
+
+ggarrange(phi_trace, phi_density,
+          nrow = 1, ncol = 2)
+
+#Beta Data
+beta_1 <- chain$samples$beta[,2][[1]]
+beta_2 <- chain$samples$beta[,2][[2]]
+beta_3 <- chain$samples$beta[,2][[3]]
+beta_data <- data.frame(chain_1 = beta_1, chain_2 = beta_2, chain_3 = beta_3, iteration = iteration)
+
+#Beta traceplot
+beta_trace <- beta_data%>%
+  ggplot(aes(x = iteration))+
+  geom_line(aes(y = var1.1), color = "#F7756D")+
+  geom_line(aes(y = var1.2), color = "#05BB38")+
+  geom_line(aes(y = var1), color = "#97A5EA")+
+  theme_classic()+
+  labs(x = "Iteration", y = "Beta", title = "Beta Trace Plot with 3 Chains",legend = NULL)+
+  theme(legend.position = "none",
+        plot.title = element_text(size = 16, face = "bold"))+
+    theme_classic()
+
+
+
+#Beta Density
+beta_density <- beta_data%>%
+  pivot_longer(names_to = "Chain", values_to = "Estimate", cols = !iteration)%>%
+  ggplot(aes(x = Estimate))+
+  geom_density()+
+  theme(legend.position = "none",
+        plot.title = element_text(size = 16, face = "bold"))+
+  labs(x = "Beta", y = "Density", title = "Density Plot of Beta across 3 Chains")+
+    theme_classic()
+
+ggarrange(beta_trace, beta_density,
+          nrow = 1, ncol = 2)
+
+#Tau Data
+tau_1 <- chain$samples$tau2[[1]]
+tau_2 <- chain$samples$tau2[[2]]
+tau_3 <- chain$samples$tau2[[3]]
+tau_data <- data.frame(chain_1 = tau_1, chain_2 = tau_2, chain_3 = tau_3, iteration = iteration)
+
+#Tau Traceplot
+tau_trace <- tau_data%>%
+  ggplot(aes(x = iteration))+
+  geom_line(aes(y = chain_1), color = "#F7756D")+
+  geom_line(aes(y = chain_2), color = "#05BB38")+
+  geom_line(aes(y = chain_3), color = "#97A5EA")+
+  theme_classic()+
+  labs(x = "Iteration", y = "Tau", title = "Tau Trace Plot with 3 Chains",legend = NULL)+
+  theme(legend.position = "none",
+        plot.title = element_text(size = 16, face = "bold"))+
+    theme_classic()
+
+
+
+#Tau Density
+tau_density <- tau_data%>%
+  pivot_longer(names_to = "Chain", values_to = "Estimate", cols = !iteration)%>%
+  ggplot(aes(x = Estimate))+
+  geom_density()+
+ theme(legend.position = "none",
+        plot.title = element_text(size = 16, face = "bold"))+
+  labs(x = "Tau", y = "Density", title = "Density Plot of Tau across 3 Chains")+
+    theme_classic()
+
+ggarrange(tau_trace, tau_density,
+          nrow = 1, ncol = 2)
+```
+
+```{r echo=FALSE}
+# coefficient summary
+chains <- chain$summary.results
+chains_df <- as.data.frame(chains)
+
+params <- chains_df[3:4,]%>%
+  mutate(sd = (Mean - `2.5%`)/2)%>%
+  select(Mean, sd)
+
+rownames(params) <- c("\u03BD²", "\u03C4²")
+
+knitr::kable(params, format = "html")
+```
+
+Our values of $\tau^2$ and $\nu^2$ are relatively low, indicating high confidence in the spatial correlation and the overall correlation between population density and GCP that our model is picking up on.
+
+
+```{r include=FALSE}
+y.fit <- chain$samples$fitted
+y.fit <- t(t(y.fit))
+
+simple_data_A$CAR <- apply(y.fit, 2, median)
+simple_data_A$LL <- apply(y.fit, 2, quantile, 0.025)
+simple_data_A$UL <- apply(y.fit, 2, quantile, 0.975)
+
+simple_data_A$dis_to_water <- simple_data_A$dis_to_water
+simple_data_A$pop <- simple_data_A$`log(POPGPW_2005_40)`
+simple_data_A$temp <- simple_data_A$TEMPAV_8008
+simple_data_A$GCP <- simple_data_A$`log(MER2005_40)`
+simple_data_A$D3 <- simple_data_A$D3
+simple_data_A$lm_pred <- simple_data_A$lm_pred
+
+at <- seq(min(c(simple_data_A$CAR, simple_data_A$LL, simple_data_A$UL,simple_data_A$lm_pred)),
+          max(c(simple_data_A$CAR, simple_data_A$LL, simple_data_A$UL,simple_data_A$lm_pred)),
+          length.out = 8)
+
+
+popuptable <- leafpop::popupTable(dplyr::mutate_if(simple_data_A,
+                                  is.numeric, round, digits = 2),
+zcol = c("pop","GCP", "temp","D3", "dis_to_water","LL", "UL","CAR"),
+row.numbers = FALSE, feature.id = FALSE)
+
+
+m1 <- mapview(simple_data_A, zcol = "CAR", map.types = "CartoDB.Positron",
+              at = at, popup = popuptable, legend = TRUE,layer.name = "CAR")
+
+
+lm_model <- mapview(simple_data_A, zcol = "lm_pred", map.types = "CartoDB.Positron", at = at, popup = popuptable, legend = TRUE,layer.name = "GLM")
+
+real <- mapview(simple_data_A, zcol = "log(MER2005_40)", map.types = "CartoDB.Positron",
+              at = at, popup = popuptable, legend = TRUE,layer.name = "log(GCP)")
+
+
+```
+
+## Results
+
+We examine this question first with a univariate GLM model, to establish a baseline prediction to which we can compare the Conditional Autoregressive (CAR) and Integrated Nested Laplace Approximation (INLA) predictions. Shown below are the coefficient estimates for $\beta_0$ and $\beta_1$, across the 3 methods.
+
+```{r echo=FALSE}
+# INLA
+nb2INLA("map.adj", W.nb)
+g <- inla.read.graph(filename = "map.adj")
+
+simple_data_A$re_u <- 1:nrow(simple_data_A)
+
+formula <- `log(MER2005_40)` ~ log(POPGPW_2005_40) + f(re_u, model = "besag", graph = g, scale.model = TRUE)
+
+res <- inla(formula, family = "gaussian", data = simple_data_A,
+control.predictor = list(compute = TRUE),
+control.compute = list(return.marginals.predictor = TRUE))
+
+
+INLAcoef <- res$summary.fixed
+
+CAR_betas <- chains_df[1:2,]%>%
+  mutate(sd = (Mean - `2.5%`)/2)%>%
+  select(Mean, sd)
+
+INLA_betas <- INLAcoef%>%
+  select(mean, sd)%>%
+  mutate(Mean = mean)%>%
+  select(Mean, sd)
+
+glm_betas <- coefs%>%
+  mutate(Mean = Estimate,
+         sd = `Std. Error`)%>%
+  select(Mean, sd)
+  
+betas <- rbind(glm_betas, CAR_betas, INLA_betas)
+
+
+
+rownames(betas) <- c("GLM Intercept","GLM log(GCP)","MCMC Intercept","MCMC log(GCP)","INLA Intercept","INLA log(GCP)")
+
+
+
+knitr::kable(betas, format = "html")
+
+# Posterior mean 
+simple_data_A$PMINLA <- res$summary.fitted.values[, "mean"]
+
+
+minla <- mapview(simple_data_A, zcol = "PMINLA", map.types = "CartoDB.Positron",
+              at = at, popup = popuptable, legend = TRUE,layer.name = "INLA")
+```
+
+
+
+
+
+### GLM Result
+
+From our GLM model, we expect that, on average, for a 1% increase in gridded population density, GCP will increase by about 1.031% in a grid, and this estimate is significant at the one percent level. This indicates not just a very strong correlation between the two variables, but a near one-to-one relationship. This strong relationship between population density and GCP agrees with the previous graph. 
+
+### CAR Result
+Similar to the GLM model, we expect on average, for a 1% increase in population density to be associated with about a 1.026% increase in GCP for a cell. This apparent one-to-one relationship across both models indicates near perfect correlation between the two variables. That is, population density appears to be an incredibly strong predictor of GCP.
+
+### INLA Result
+Again, we obtain very similar results using INLA. In fact, the coefficient and standard deviation estimates are virtually identical to GLM. This is mainly due to the strong relationship between population density and GCP. It is interesting that INLA is significantly more similar in its results to GLM than MCMC is to GLM.
+
+
+```{r echo=FALSE}
+MAE_MCMC_calculation <- 1/length(simple_data_A$CAR)*(sum(simple_data_A$`log(MER2005_40)`- simple_data_A$CAR))
+MAE_GLM_calculation <- 1/length(simple_data_A$lm_pred)*(sum(simple_data_A$`log(MER2005_40)`- simple_data_A$lm_pred))
+MAE_INLA_calculation <- 1/length(simple_data_A$PMINLA)*(sum(simple_data_A$`log(MER2005_40)`- simple_data_A$PMINLA))
+
+
+MAEdf <- data.frame(MAE = c(MAE_INLA_calculation, MAE_GLM_calculation, MAE_MCMC_calculation), Method = c("INLA", "GLM", "MCMC"))
+```
+
+## Final Prediction (Real data, GLM, CAR, INLA )
+```{r echo=FALSE}
+# all map
+m <- leafsync::sync(real,lm_model, m1, minla, ncol = 2) 
+m
+```
+
+We can see from the graphs plotted above that all three models we ran produced not just near identical results to the other models, but to the real data. This tells us that all models performed very well, and this may indicate that the specific data we used did not require a particularly complex model to achieve high accuracy due to the strong correlation between our predictor of interest and outcome.
+
+### Limitation
+
+Spatial modeling with the ICAR model presents several challenges that can impact its effectiveness. The ICAR model assumes spatial stationarity, which implies that the strength of spatial dependence remains constant across the entire study area. This may not hold true in regions with diverse spatial patterns, leading to inaccurate estimations of spatial relationships. To enhance spatial modeling, the BYM (Besag, York, and Mollié) model offers a solution by integrating structured (ICAR component) and unstructured random effects, enabling more accurate predictions in complex spatial settings. 
+
+Additionally, the ICAR model struggles with sparse data or irregular spatial patterns, resulting in unstable estimates and unreliable predictions. Implementing the ICAR model can be computationally intensive, especially for large datasets or complex spatial structures. The need to compute and manipulate spatial adjacency matrices for potentially numerous spatial units adds to the model's complexity.
+
+Alternative Bayesian inference methods like INLA (Integrated Nested Laplace Approximation) provide efficient approximations of posterior distributions suitable for large datasets, which makes it suitable for large datasets and complex models where MCMC might be computationally prohibitive. However,, its accuracy can depend on the quality of the Laplace approximation and the complexity of the model, while MCMC directly samples from the posterior distribution of model parameters.
+
+## Conclusion
+
+Bayesian spatial modeling combines the interpretability and adaptability of Bayesian models with the ability to capture spatial relationships. This provides a more flexible framework for analyzing geographical data than traditional spatial modeling. 
+
+Though our data analysis failed to demonstrate meaningful differences in results between our different models, our theoretical construction of the ICAR model indicates that it should produce more accurate and reliable results than a GLM model due to the regard for correlation between grids. Our models used only one predictor variable, due to the strength of the predictive ability of population density and the limited variables in our data. Population density was the only predictor for which our MCMC simulations were stable. 
+
+It should be noted that, no matter how flexible a model is, whether a given model is most appropriate depends largely on the context of a given analysis. For example, if we have a large amount of data and do not expect to incorporate any in the future, a frequentist model may be sufficient. However, understanding the potential trade-offs of these models informs more precise analysis.
+
+
+## Reference
+
