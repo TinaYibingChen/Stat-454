@@ -150,7 +150,7 @@ $$
 \begin{split}
 \text{Likelihood} \;\; Y_i &\sim \mathcal{N}(\mu_i , \nu^2) \quad  \text{where } \;\; \mu_i = X_i \beta + \phi_i \\
 \text{Prior} \;\; \beta &\sim \mathcal{N}(\mu_\beta, \Sigma_\beta) \\
-\phi_i|\phi_{-i}, W, \tau^2, &\sim \mathcal{N}\left(\frac{\sum_{j=1}^n w_{ij} \phi_j}{\sum_{j=1}^n w_{ij}}, \frac{\tau^2}{\sum_{j=1}^n w_{ij} \phi_j}\right) \\
+\phi_i|\phi_{-i}, W, \tau^2, &\sim \mathcal{N}\left(\frac{\sum_{j=1}^n w_{ij} \phi_j}{\sum_{j=1}^n w_{ij}}, \frac{\tau^2}{\sum_{j=1}^n w_{ij} }\right) \\
 \nu^2 &\sim \text{Inverse-Gamma}(1, 0.01) \\
 \tau^2 &\sim \text{Inverse-Gamma}(1, 0.01) \\
 \end{split}
@@ -160,8 +160,8 @@ The posterior distribution of the parameters $\beta$, $\phi$, $\nu^2$, and $\tau
 
 $$
 \begin{split}
-p(\phi, \beta, \tau^2 ,\nu^2 \mid Y_i) &\propto prior \cdot likelihood \\
-&= p(\beta) \cdot p(\phi \mid  \tau^2) \cdot p(\tau^2) \cdot p(\nu^2)\cdot p(Y_i \mid \beta, \phi, \nu^2)
+p(\phi_i, \beta, \tau^2 ,\nu^2 \mid Y_i) &\propto \text{prior} \cdot \text{likelihood} \\
+&= p(\beta) \cdot p(\phi_i \mid  \tau^2) \cdot p(\tau^2) \cdot p(\nu^2)\cdot p(Y_i \mid \beta, \phi_i, \nu^2)
 \end{split}
 $$
 
